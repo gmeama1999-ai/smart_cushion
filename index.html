@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#10161B">
+<meta name="theme-color" content="#F6FAF4">
 <title>坐姿仪表盘 · Smart Cushion</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,17 +13,17 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root{
-    --bg:#0F1418;
-    --surface:#171F25;
-    --surface-2:#1D262D;
-    --border:#28323A;
-    --text:#E9EEF1;
-    --muted:#8CA0AB;
-    --good:#49D0A6;
-    --crossed:#F2A65A;
-    --hunch:#F0665B;
-    --away:#3D4952;
-    --accent:#5AC8FA;
+    --bg:#F6FAF4;
+    --surface:#FFFFFF;
+    --surface-2:#EEF6EC;
+    --border:#DCE8D6;
+    --text:#16231B;
+    --muted:#71887C;
+    --good:#0FA98C;
+    --crossed:#F6C445;
+    --hunch:#E2574A;
+    --away:#CBD9C4;
+    --accent:#F0B429;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
@@ -40,19 +40,23 @@
 
   #connectBtn{
     display:flex;align-items:center;gap:8px;
-    background:var(--surface-2); border:1px solid var(--border);
+    background:var(--surface); border:1px solid var(--border);
     color:var(--text); padding:9px 14px; border-radius:999px;
     font-size:13px; font-weight:600; font-family:'Inter',sans-serif;
     cursor:pointer; white-space:nowrap;
+    box-shadow:0 1px 2px rgba(22,35,27,0.06);
   }
   #connectBtn .dot{width:8px;height:8px;border-radius:50%;background:var(--away);transition:background .3s;}
-  #connectBtn.connected .dot{background:var(--good); box-shadow:0 0 8px var(--good);}
+  #connectBtn.connected{background:#E4F6EF; border-color:#BFE8DA;}
+  #connectBtn.connected .dot{background:var(--good); box-shadow:0 0 8px rgba(15,169,140,.5);}
+  #connectBtn.connecting{background:#FDF3D9; border-color:#F3DFA0;}
   #connectBtn.connecting .dot{background:var(--accent); animation:pulse 1s infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
 
   .card{
     background:var(--surface); border:1px solid var(--border);
     border-radius:18px; padding:18px; margin-bottom:14px;
+    box-shadow:0 1px 2px rgba(22,35,27,0.03), 0 10px 24px -16px rgba(22,35,27,0.10);
   }
   .card h2{margin:0 0 14px; font-size:13px; font-weight:600; letter-spacing:.08em;
     text-transform:uppercase; color:var(--muted);}
@@ -98,7 +102,7 @@
 
   footer{margin-top:6px; display:flex; flex-direction:column; gap:10px; align-items:center;}
   #resetBtn{
-    background:none; border:1px solid var(--border); color:var(--muted);
+    background:var(--surface); border:1px solid var(--border); color:var(--muted);
     padding:10px 18px; border-radius:12px; font-size:13px; font-family:'Inter',sans-serif; cursor:pointer;
   }
   #resetBtn:active{background:var(--surface-2);}
@@ -169,9 +173,7 @@
   <footer>
     <button id="resetBtn">重置今日数据</button>
     <p id="hint">
-      需要使用 <b>Android 手机上的 Chrome 浏览器</b>（Web Bluetooth）打开本页面，并通过
-      <b>https 或 localhost</b> 方式访问（不能直接双击打开本地文件）。iOS 上需使用支持 Web
-      Bluetooth 的浏览器（如 Bluefy）。首次连接时请在弹出的设备列表中选择「SmartCushion」。
+      <b>Android 
     </p>
   </footer>
 
