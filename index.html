@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#10161B">
+<title>坐姿仪表盘 · Smart Cushion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0F1418;
+    --surface:#171F25;
+    --surface-2:#1D262D;
+    --border:#28323A;
+    --text:#E9EEF1;
+    --muted:#8CA0AB;
+    --good:#49D0A6;
+    --crossed:#F2A65A;
+    --hunch:#F0665B;
+    --away:#3D4952;
+    --accent:#5AC8FA;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:'Inter',system-ui,sans-serif; overscroll-behavior-y:none;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+
+  #app{max-width:480px;margin:0 auto;padding:18px 16px 48px;}
+
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+  .brand{display:flex;flex-direction:column;gap:2px;}
+  .brand .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);}
+  .brand h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-0.01em;}
+
+  #connectBtn{
+    display:flex;align-items:center;gap:8px;
+    background:var(--surface-2); border:1px solid var(--border);
+    color:var(--text); padding:9px 14px; border-radius:999px;
+    font-size:13px; font-weight:600; font-family:'Inter',sans-serif;
+    cursor:pointer; white-space:nowrap;
+  }
+  #connectBtn .dot{width:8px;height:8px;border-radius:50%;background:var(--away);transition:background .3s;}
+  #connectBtn.connected .dot{background:var(--good); box-shadow:0 0 8px var(--good);}
+  #connectBtn.connecting .dot{background:var(--accent); animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:18px; padding:18px; margin-bottom:14px;
+  }
+  .card h2{margin:0 0 14px; font-size:13px; font-weight:600; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--muted);}
+
+  /* ---- Hero ring ---- */
+  #heroCard{position:relative; padding-top:22px;}
+  #ringWrap{position:relative; width:220px; height:220px; margin:0 auto;}
+  #ringCenter{position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; pointer-events:none;}
+  #ringCenter .val{font-size:34px; font-weight:700;}
+  #ringCenter .lbl{font-size:12px; color:var(--muted); margin-top:2px;}
+  .legend{display:flex; justify-content:center; gap:18px; margin-top:16px; flex-wrap:wrap;}
+  .legend-item{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);}
+  .legend-item .sw{width:9px;height:9px;border-radius:3px;}
+
+  /* ---- Live status ---- */
+  #liveCard{display:flex; align-items:center; justify-content:space-between; gap:14px;}
+  .live-left{display:flex; align-items:center; gap:12px;}
+  .badge{
+    width:46px;height:46px;border-radius:14px; display:flex; align-items:center; justify-content:center;
+    font-size:22px; background:var(--surface-2); border:1px solid var(--border);
+  }
+  .live-title{font-size:15px; font-weight:600;}
+  .live-sub{font-size:12px; color:var(--muted); margin-top:2px;}
+  #liveDuration{font-size:20px; font-weight:600; text-align:right;}
+
+  /* ---- Timeline ---- */
+  #timelineTrack{
+    display:flex; align-items:flex-end; gap:2px; height:56px;
+    overflow-x:auto; padding-bottom:4px; scrollbar-width:none;
+  }
+  #timelineTrack::-webkit-scrollbar{display:none;}
+  .tl-bar{flex:0 0 5px; min-width:5px; border-radius:2px; background:var(--away); height:100%;}
+  .tl-empty{font-size:12px; color:var(--muted); padding:14px 0;}
+
+  /* ---- Stat grid ---- */
+  .stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .stat-box{background:var(--surface-2); border:1px solid var(--border); border-radius:14px; padding:12px 14px;}
+  .stat-box .n{font-size:20px; font-weight:600;}
+  .stat-box .l{font-size:11px; color:var(--muted); margin-top:3px;}
+
+  #distChart{width:100%; height:120px;}
+
+  footer{margin-top:6px; display:flex; flex-direction:column; gap:10px; align-items:center;}
+  #resetBtn{
+    background:none; border:1px solid var(--border); color:var(--muted);
+    padding:10px 18px; border-radius:12px; font-size:13px; font-family:'Inter',sans-serif; cursor:pointer;
+  }
+  #resetBtn:active{background:var(--surface-2);}
+  #hint{font-size:11.5px; color:var(--muted); text-align:center; line-height:1.6; padding:0 8px;}
+  #hint b{color:var(--text);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="brand">
+      <span class="eyebrow">Smart Cushion</span>
+      <h1 class="display">今日坐姿仪表盘</h1>
+    </div>
+    <button id="connectBtn"><span class="dot"></span><span id="connectLabel">连接坐垫</span></button>
+  </header>
+
+  <div class="card" id="heroCard">
+    <h2>今日总览</h2>
+    <div id="ringWrap">
+      <canvas id="ringChart"></canvas>
+      <div id="ringCenter">
+        <div class="val mono" id="ringTotal">0h 00m</div>
+        <div class="lbl">今日坐下总时长</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="legend-item"><span class="sw" style="background:var(--good)"></span>端正</span>
+      <span class="legend-item"><span class="sw" style="background:var(--crossed)"></span>二郎腿</span>
+      <span class="legend-item"><span class="sw" style="background:var(--hunch)"></span>驼背</span>
+    </div>
+  </div>
+
+  <div class="card" id="liveCard">
+    <div class="live-left">
+      <div class="badge" id="liveBadge">💺</div>
+      <div>
+        <div class="live-title" id="liveTitle">尚未连接</div>
+        <div class="live-sub" id="liveSub">点击右上角连接坐垫</div>
+      </div>
+    </div>
+    <div id="liveDuration" class="mono">--:--</div>
+  </div>
+
+  <div class="card">
+    <h2>坐姿时间轴（近2小时，每格1分钟）</h2>
+    <div id="timelineTrack"><div class="tl-empty">连接后开始记录</div></div>
+  </div>
+
+  <div class="card">
+    <h2>统计</h2>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="n mono" id="statGoodPct">--</div><div class="l">良好坐姿占比</div></div>
+      <div class="stat-box"><div class="n mono" id="statSit">--</div><div class="l">今日坐下总时长</div></div>
+      <div class="stat-box"><div class="n mono" id="statCrossed">--</div><div class="l">二郎腿累计时长</div></div>
+      <div class="stat-box"><div class="n mono" id="statHunch">--</div><div class="l">驼背累计时长</div></div>
+      <div class="stat-box"><div class="n mono" id="statReminders">--</div><div class="l">久坐提醒次数</div></div>
+      <div class="stat-box"><div class="n mono" id="statAlerts">--</div><div class="l">姿势警报次数</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>椅背距离曲线（毫米）</h2>
+    <canvas id="distChart"></canvas>
+  </div>
+
+  <footer>
+    <button id="resetBtn">重置今日数据</button>
+    <p id="hint">
+      需要使用 <b>Android 手机上的 Chrome 浏览器</b>（Web Bluetooth）打开本页面，并通过
+      <b>https 或 localhost</b> 方式访问（不能直接双击打开本地文件）。iOS 上需使用支持 Web
+      Bluetooth 的浏览器（如 Bluefy）。首次连接时请在弹出的设备列表中选择「SmartCushion」。
+    </p>
+  </footer>
+
+</div>
+
+<script>
+// ===== 必须与 ESP32 端代码中的 UUID 完全一致 =====
+const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+const CHAR_TX_UUID  = 'beb5483e-36e1-4688-b7f5-ea07361b26a8'; // 通知：硬件 -> 手机
+const CHAR_RX_UUID  = 'beb5483e-36e1-4688-b7f5-ea07361b26a9'; // 写入：手机 -> 硬件
+
+let bleDevice = null, txChar = null, rxChar = null;
+
+// 近 2 小时的分钟级时间轴数据：每个 bucket 记录本分钟内各状态出现的次数
+const timelineBuckets = new Map(); // key: minuteTs, value: {good,crossed,hunch,away}
+const MAX_MINUTES = 120;
+
+// 椅背距离曲线数据
+const distLabels = [], distData = [];
+const MAX_DIST_POINTS = 60;
+
+// ---------- 图表初始化 ----------
+const ringCtx = document.getElementById('ringChart').getContext('2d');
+const ringChart = new Chart(ringCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['端正', '二郎腿', '驼背', '暂无数据'],
+    datasets: [{
+      data: [0, 0, 0, 1],
+      backgroundColor: ['#49D0A6', '#F2A65A', '#F0665B', '#232D34'],
+      borderWidth: 0,
+      cutout: '76%'
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    animation: { duration: 400 }
+  }
+});
+
+const distCtx = document.getElementById('distChart').getContext('2d');
+const distChart = new Chart(distCtx, {
+  type: 'line',
+  data: {
+    labels: distLabels,
+    datasets: [{
+      data: distData,
+      borderColor: '#5AC8FA',
+      backgroundColor: 'rgba(90,200,250,0.12)',
+      fill: true, tension: 0.35, pointRadius: 0, borderWidth: 2
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    scales: {
+      x: { display: false },
+      y: { ticks: { color: '#8CA0AB', font: { size: 10 } }, grid: { color: '#20292F' } }
+    },
+    plugins: { legend: { display: false } },
+    animation: false
+  }
+});
+
+// ---------- 工具函数 ----------
+function fmtHM(totalSec){
+  const h = Math.floor(totalSec/3600);
+  const m = Math.floor((totalSec%3600)/60);
+  return h > 0 ? `${h}h ${String(m).padStart(2,'0')}m` : `${m}m`;
+}
+function fmtMS(totalSec){
+  const m = Math.floor(totalSec/60);
+  const s = totalSec%60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// ---------- 连接逻辑 ----------
+const connectBtn = document.getElementById('connectBtn');
+const connectLabel = document.getElementById('connectLabel');
+
+connectBtn.addEventListener('click', async () => {
+  if (!navigator.bluetooth) {
+    alert('当前浏览器不支持 Web Bluetooth。请在 Android 上使用 Chrome，或在 iOS 上使用 Bluefy 浏览器打开本页面。');
+    return;
+  }
+  if (bleDevice && bleDevice.gatt.connected) {
+    bleDevice.gatt.disconnect();
+    return;
+  }
+  try {
+    connectBtn.classList.add('connecting');
+    connectLabel.textContent = '连接中...';
+
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }],
+      optionalServices: [SERVICE_UUID]
+    });
+    bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+    const server = await bleDevice.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    txChar = await service.getCharacteristic(CHAR_TX_UUID);
+    rxChar = await service.getCharacteristic(CHAR_RX_UUID);
+
+    await txChar.startNotifications();
+    txChar.addEventListener('characteristicvaluechanged', onData);
+
+    connectBtn.classList.remove('connecting');
+    connectBtn.classList.add('connected');
+    connectLabel.textContent = bleDevice.name || 'SmartCushion';
+    document.getElementById('liveTitle').textContent = '已连接，等待数据...';
+    document.getElementById('liveSub').textContent = '';
+  } catch (err) {
+    console.error(err);
+    connectBtn.classList.remove('connecting');
+    connectLabel.textContent = '连接坐垫';
+    if (err.name !== 'NotFoundError') alert('连接失败：' + err.message);
+  }
+});
+
+function onDisconnected(){
+  connectBtn.classList.remove('connected','connecting');
+  connectLabel.textContent = '连接坐垫';
+  document.getElementById('liveTitle').textContent = '连接已断开';
+  document.getElementById('liveSub').textContent = '点击右上角重新连接';
+}
+
+// ---------- 接收数据 ----------
+const decoder = new TextDecoder('utf-8');
+function onData(event){
+  let data;
+  try {
+    data = JSON.parse(decoder.decode(event.target.value));
+  } catch(e) { return; }
+
+  updateLiveStatus(data);
+  updateHeroRing(data);
+  updateStatCards(data);
+  pushTimelineSample(data);
+  pushDistancePoint(data);
+}
+
+function updateLiveStatus(d){
+  const badge = document.getElementById('liveBadge');
+  const title = document.getElementById('liveTitle');
+  const sub = document.getElementById('liveSub');
+  const dur = document.getElementById('liveDuration');
+
+  if (!d.sitting){
+    badge.textContent = '🪑';
+    title.textContent = '空闲 · 未检测到坐下';
+    sub.textContent = '';
+    dur.textContent = '--:--';
+  } else if (d.leaving){
+    badge.textContent = '⏳';
+    title.textContent = '暂离观察中';
+    sub.textContent = '30秒内返回将继续计时';
+    dur.textContent = fmtMS(d.sitDurationSec);
+  } else if (d.hunchbackNow){
+    badge.textContent = '⚠️';
+    title.textContent = '驼背 / 前倾';
+    sub.textContent = '请挺直腰背';
+    dur.textContent = fmtMS(d.sitDurationSec);
+  } else if (d.crossedLegsNow){
+    badge.textContent = '⚠️';
+    title.textContent = '翘二郎腿';
+    sub.textContent = '请双脚落地端正坐姿';
+    dur.textContent = fmtMS(d.sitDurationSec);
+  } else {
+    badge.textContent = '✅';
+    title.textContent = '坐姿端正';
+    sub.textContent = '继续保持';
+    dur.textContent = fmtMS(d.sitDurationSec);
+  }
+}
+
+function updateHeroRing(d){
+  const good = Math.max(0, d.totalSitSec - d.totalCrossedLegsSec - d.totalHunchbackSec);
+  const hasData = d.totalSitSec > 0;
+  ringChart.data.datasets[0].data = hasData
+    ? [good, d.totalCrossedLegsSec, d.totalHunchbackSec, 0]
+    : [0,0,0,1];
+  ringChart.update('none');
+  document.getElementById('ringTotal').textContent = fmtHM(d.totalSitSec);
+}
+
+function updateStatCards(d){
+  const good = Math.max(0, d.totalSitSec - d.totalCrossedLegsSec - d.totalHunchbackSec);
+  const pct = d.totalSitSec > 0 ? Math.round(good / d.totalSitSec * 100) : 0;
+  document.getElementById('statGoodPct').textContent = d.totalSitSec > 0 ? pct + '%' : '--';
+  document.getElementById('statSit').textContent = fmtHM(d.totalSitSec);
+  document.getElementById('statCrossed').textContent = fmtHM(d.totalCrossedLegsSec);
+  document.getElementById('statHunch').textContent = fmtHM(d.totalHunchbackSec);
+  document.getElementById('statReminders').textContent = d.reminderCount;
+  document.getElementById('statAlerts').textContent = (d.crossedLegsAlerts + d.hunchbackAlerts);
+}
+
+// ---------- 时间轴（分钟级 hypnogram 风格） ----------
+function pushTimelineSample(d){
+  const now = new Date();
+  const minuteKey = Math.floor(now.getTime()/60000);
+
+  let state = 'away';
+  if (d.sitting && !d.leaving){
+    if (d.hunchbackNow) state = 'hunch';
+    else if (d.crossedLegsNow) state = 'crossed';
+    else state = 'good';
+  }
+
+  if (!timelineBuckets.has(minuteKey)){
+    timelineBuckets.set(minuteKey, {good:0, crossed:0, hunch:0, away:0});
+    // 控制内存：只保留最近 MAX_MINUTES 分钟
+    if (timelineBuckets.size > MAX_MINUTES){
+      const oldestKey = timelineBuckets.keys().next().value;
+      timelineBuckets.delete(oldestKey);
+    }
+  }
+  timelineBuckets.get(minuteKey)[state]++;
+  renderTimeline();
+}
+
+function renderTimeline(){
+  const track = document.getElementById('timelineTrack');
+  track.innerHTML = '';
+  const colorMap = {good:'var(--good)', crossed:'var(--crossed)', hunch:'var(--hunch)', away:'var(--away)'};
+  // 优先显示不良姿势：同一分钟内若曾出现驼背/二郎腿，优先着色提醒
+  for (const [, counts] of timelineBuckets){
+    let dominant = 'away';
+    if (counts.hunch > 0) dominant = 'hunch';
+    else if (counts.crossed > 0) dominant = 'crossed';
+    else if (counts.good > 0) dominant = 'good';
+    const bar = document.createElement('div');
+    bar.className = 'tl-bar';
+    bar.style.background = colorMap[dominant];
+    bar.style.height = dominant === 'away' ? '30%' : '100%';
+    track.appendChild(bar);
+  }
+  track.scrollLeft = track.scrollWidth;
+}
+
+// ---------- 椅背距离曲线 ----------
+function pushDistancePoint(d){
+  if (d.backDistance === undefined || d.backDistance < 0) return;
+  distLabels.push('');
+  distData.push(d.backDistance);
+  if (distLabels.length > MAX_DIST_POINTS){
+    distLabels.shift(); distData.shift();
+  }
+  distChart.update('none');
+}
+
+// ---------- 重置今日数据 ----------
+document.getElementById('resetBtn').addEventListener('click', async () => {
+  if (!confirm('确定要清空今日的坐姿统计数据吗？')) return;
+  timelineBuckets.clear();
+  distLabels.length = 0; distData.length = 0;
+  renderTimeline();
+  distChart.update('none');
+  ringChart.data.datasets[0].data = [0,0,0,1];
+  ringChart.update('none');
+  document.getElementById('ringTotal').textContent = '0h 00m';
+
+  if (rxChar){
+    try {
+      const encoder = new TextEncoder();
+      await rxChar.writeValue(encoder.encode('RESET'));
+    } catch(e){ console.warn('未能向硬件发送重置指令：', e); }
+  }
+});
+</script>
+</body>
+</html>
