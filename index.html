@@ -230,7 +230,7 @@ const CHAR_RX_UUID  = 'beb5483e-36e1-4688-b7f5-ea07361b26a9'; // 写入：手机
 
 let bleDevice = null, txChar = null, rxChar = null;
 
-// 近 2 小时的分钟级时间轴数据：每个 bucket 记录本分钟内各状态出现的次数
+// 近 2 小时的分钟级时间轴数据
 const timelineBuckets = new Map(); // key: minuteTs, value: {good,crossed,hunch,away}
 const MAX_MINUTES = 120;
 
@@ -238,7 +238,7 @@ const MAX_MINUTES = 120;
 const distLabels = [], distData = [];
 const MAX_DIST_POINTS = 60;
 
-// ---------- 图表初始化（做了防御性处理：即使 Chart.js 加载失败/较慢，也不影响蓝牙连接功能） ----------
+// ---------- 图表初始化 ----------
 let ringChart = null;
 let distChart = null;
 
@@ -359,22 +359,47 @@ function onDisconnected(){
   document.getElementById('liveSub').textContent = '点击右上角重新连接';
   saveReminderBtn.disabled = true;
   hasSyncedFromDevice = false;
+  bleAssemblyBuffer = ''; // 断开连接时清空拼包缓存
 }
 
-// ---------- 接收数据 ----------
+// ---------- 接收并重组分包数据 ----------
 const decoder = new TextDecoder('utf-8');
-function onData(event){
-  let data;
-  try {
-    data = JSON.parse(decoder.decode(event.target.value));
-  } catch(e) { return; }
+let bleAssemblyBuffer = ''; // 分包重组缓存区
 
-  updateLiveStatus(data);
-  updateHeroRing(data);
-  updateStatCards(data);
-  pushTimelineSample(data);
-  pushDistancePoint(data);
-  syncReminderFromDevice(data);
+function onData(event){
+  const rawStr = decoder.decode(event.target.value);
+  if (!rawStr || rawStr.length < 2) return;
+
+  const prefix = rawStr.substring(0, 2);
+  const content = rawStr.substring(2);
+
+  if (prefix === 'S:') {
+    // S: 起始包，覆盖写入缓存
+    bleAssemblyBuffer = content;
+  } else if (prefix === 'C:') {
+    // C: 延续包，追加写入缓存
+    bleAssemblyBuffer += content;
+  } else if (prefix === 'E:') {
+    // E: 结束包，追加写入，并开始解析 JSON
+    bleAssemblyBuffer += content;
+    
+    try {
+      const data = JSON.parse(bleAssemblyBuffer);
+      
+      // 解析成功后分发到 UI 各部分
+      updateLiveStatus(data);
+      updateHeroRing(data);
+      updateStatCards(data);
+      pushTimelineSample(data);
+      pushDistancePoint(data);
+      syncReminderFromDevice(data);
+    } catch(e) {
+      console.warn('分包拼装失败或数据损坏，无法解析 JSON:', e, '\n当前缓存内容:', bleAssemblyBuffer);
+    }
+    
+    // 解析完成后重置缓存，防止对下一帧数据造成污染
+    bleAssemblyBuffer = '';
+  }
 }
 
 function updateLiveStatus(d){
@@ -434,7 +459,7 @@ function updateStatCards(d){
   document.getElementById('statAlerts').textContent = (d.crossedLegsAlerts + d.hunchbackAlerts);
 }
 
-// ---------- 时间轴（分钟级 hypnogram 风格） ----------
+// ---------- 时间轴 ----------
 function pushTimelineSample(d){
   const now = new Date();
   const minuteKey = Math.floor(now.getTime()/60000);
@@ -448,7 +473,6 @@ function pushTimelineSample(d){
 
   if (!timelineBuckets.has(minuteKey)){
     timelineBuckets.set(minuteKey, {good:0, crossed:0, hunch:0, away:0});
-    // 控制内存：只保留最近 MAX_MINUTES 分钟
     if (timelineBuckets.size > MAX_MINUTES){
       const oldestKey = timelineBuckets.keys().next().value;
       timelineBuckets.delete(oldestKey);
@@ -462,7 +486,6 @@ function renderTimeline(){
   const track = document.getElementById('timelineTrack');
   track.innerHTML = '';
   const colorMap = {good:'var(--good)', crossed:'var(--crossed)', hunch:'var(--hunch)', away:'var(--away)'};
-  // 优先显示不良姿势：同一分钟内若曾出现驼背/二郎腿，优先着色提醒
   for (const [, counts] of timelineBuckets){
     let dominant = 'away';
     if (counts.hunch > 0) dominant = 'hunch';
@@ -515,11 +538,10 @@ const reminderCurrentValEl = document.getElementById('reminderCurrentVal');
 const reminderStatusEl = document.getElementById('reminderStatus');
 const saveReminderBtn = document.getElementById('saveReminderBtn');
 
-let stepperMinutes = 30; // 滑块/步进器当前显示的（待保存的）分钟数
-let hasSyncedFromDevice = false; // 连接后只自动同步一次设备当前设置，避免覆盖用户正在调整的值
+let stepperMinutes = 30; 
+let hasSyncedFromDevice = false; 
 const REMINDER_MIN = 1, REMINDER_MAX = 180;
 
-// 步进幅度会随数值变大而变大，避免从 1 拉到 120 要点几十次
 function stepAmount(v){
   if (v < 10) return 1;
   if (v < 60) return 5;
@@ -540,7 +562,6 @@ document.getElementById('stepUp').addEventListener('click', () => {
 });
 renderStepper();
 
-// 收到硬件数据后，把「当前生效值」显示出来；连接后第一次收到数据时，把步进器也同步成设备当前值
 function syncReminderFromDevice(d){
   if (d.reminderIntervalMin === undefined) return;
   reminderCurrentValEl.textContent = d.reminderIntervalMin;
@@ -569,7 +590,6 @@ saveReminderBtn.addEventListener('click', async () => {
   }
 });
 
-// 断开连接时，重置为下次连接重新同步
 window.addEventListener('beforeunload', () => { hasSyncedFromDevice = false; });
 </script>
 </body>
