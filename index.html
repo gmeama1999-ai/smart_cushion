@@ -100,6 +100,29 @@
 
   #distChart{width:100%; height:120px;}
 
+  /* ---- Reminder settings ---- */
+  #reminderRow{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+  .reminder-current{font-size:14px; color:var(--muted); display:flex; align-items:center; gap:6px;}
+  .reminder-current .reminder-value{font-size:20px; font-weight:700; color:var(--text);}
+  .stepper{display:flex; align-items:center; gap:2px; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:12px; padding:4px;}
+  .step-btn{
+    width:34px; height:34px; border-radius:9px; border:none; background:var(--surface);
+    color:var(--text); font-size:18px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 1px 2px rgba(22,35,27,0.08);
+  }
+  .step-btn:active{background:var(--good); color:#fff;}
+  .step-num{min-width:44px; text-align:center; font-size:16px; font-weight:600;}
+  #saveReminderBtn{
+    margin-top:14px; width:100%; padding:12px; border:none; border-radius:12px;
+    background:var(--good); color:#fff; font-size:14px; font-weight:600;
+    font-family:'Inter',sans-serif; cursor:pointer;
+  }
+  #saveReminderBtn:disabled{background:var(--away); cursor:not-allowed;}
+  #saveReminderBtn:active:not(:disabled){background:#0C8A73;}
+  #reminderStatus{font-size:12px; color:var(--muted); margin-top:8px; min-height:16px; text-align:center;}
+  #reminderStatus.ok{color:var(--good); font-weight:600;}
+
   footer{margin-top:6px; display:flex; flex-direction:column; gap:10px; align-items:center;}
   #resetBtn{
     background:var(--surface); border:1px solid var(--border); color:var(--muted);
@@ -154,6 +177,24 @@
   </div>
 
   <div class="card">
+    <h2>久坐提醒设置</h2>
+    <div id="reminderRow">
+      <div class="reminder-current">
+        <span class="reminder-label">每隔</span>
+        <span class="reminder-value mono" id="reminderCurrentVal">--</span>
+        <span class="reminder-label">分钟提醒一次</span>
+      </div>
+      <div class="stepper">
+        <button class="step-btn" id="stepDown" type="button">−</button>
+        <span class="step-num mono" id="stepNum">30</span>
+        <button class="step-btn" id="stepUp" type="button">＋</button>
+      </div>
+    </div>
+    <button id="saveReminderBtn" disabled>保存到坐垫</button>
+    <div id="reminderStatus"></div>
+  </div>
+
+  <div class="card">
     <h2>统计</h2>
     <div class="stat-grid">
       <div class="stat-box"><div class="n mono" id="statGoodPct">--</div><div class="l">良好坐姿占比</div></div>
@@ -173,7 +214,7 @@
   <footer>
     <button id="resetBtn">重置今日数据</button>
     <p id="hint">
-      <b>Android 
+       <b>Android 
     </p>
   </footer>
 
@@ -300,6 +341,7 @@ connectBtn.addEventListener('click', async () => {
     connectLabel.textContent = bleDevice.name || 'SmartCushion';
     document.getElementById('liveTitle').textContent = '已连接，等待数据...';
     document.getElementById('liveSub').textContent = '';
+    saveReminderBtn.disabled = false;
   } catch (err) {
     console.error(err);
     connectBtn.classList.remove('connecting');
@@ -313,6 +355,8 @@ function onDisconnected(){
   connectLabel.textContent = '连接坐垫';
   document.getElementById('liveTitle').textContent = '连接已断开';
   document.getElementById('liveSub').textContent = '点击右上角重新连接';
+  saveReminderBtn.disabled = true;
+  hasSyncedFromDevice = false;
 }
 
 // ---------- 接收数据 ----------
@@ -328,6 +372,7 @@ function onData(event){
   updateStatCards(data);
   pushTimelineSample(data);
   pushDistancePoint(data);
+  syncReminderFromDevice(data);
 }
 
 function updateLiveStatus(d){
@@ -461,6 +506,69 @@ document.getElementById('resetBtn').addEventListener('click', async () => {
     } catch(e){ console.warn('未能向硬件发送重置指令：', e); }
   }
 });
+
+// ---------- 久坐提醒间隔设置 ----------
+const stepNumEl = document.getElementById('stepNum');
+const reminderCurrentValEl = document.getElementById('reminderCurrentVal');
+const reminderStatusEl = document.getElementById('reminderStatus');
+const saveReminderBtn = document.getElementById('saveReminderBtn');
+
+let stepperMinutes = 30; // 滑块/步进器当前显示的（待保存的）分钟数
+let hasSyncedFromDevice = false; // 连接后只自动同步一次设备当前设置，避免覆盖用户正在调整的值
+const REMINDER_MIN = 1, REMINDER_MAX = 180;
+
+// 步进幅度会随数值变大而变大，避免从 1 拉到 120 要点几十次
+function stepAmount(v){
+  if (v < 10) return 1;
+  if (v < 60) return 5;
+  return 10;
+}
+
+function renderStepper(){
+  stepNumEl.textContent = stepperMinutes;
+}
+
+document.getElementById('stepDown').addEventListener('click', () => {
+  stepperMinutes = Math.max(REMINDER_MIN, stepperMinutes - stepAmount(stepperMinutes));
+  renderStepper();
+});
+document.getElementById('stepUp').addEventListener('click', () => {
+  stepperMinutes = Math.min(REMINDER_MAX, stepperMinutes + stepAmount(stepperMinutes));
+  renderStepper();
+});
+renderStepper();
+
+// 收到硬件数据后，把「当前生效值」显示出来；连接后第一次收到数据时，把步进器也同步成设备当前值
+function syncReminderFromDevice(d){
+  if (d.reminderIntervalMin === undefined) return;
+  reminderCurrentValEl.textContent = d.reminderIntervalMin;
+  if (!hasSyncedFromDevice){
+    stepperMinutes = d.reminderIntervalMin;
+    renderStepper();
+    hasSyncedFromDevice = true;
+  }
+}
+
+saveReminderBtn.addEventListener('click', async () => {
+  if (!rxChar) return;
+  try {
+    saveReminderBtn.disabled = true;
+    const encoder = new TextEncoder();
+    await rxChar.writeValue(encoder.encode('SET_REMINDER:' + stepperMinutes));
+    reminderStatusEl.textContent = `已保存：每 ${stepperMinutes} 分钟提醒一次 ✓`;
+    reminderStatusEl.classList.add('ok');
+    setTimeout(() => { reminderStatusEl.textContent = ''; reminderStatusEl.classList.remove('ok'); }, 3000);
+  } catch(e){
+    console.warn('设置久坐提醒间隔失败：', e);
+    reminderStatusEl.textContent = '保存失败，请重试';
+    reminderStatusEl.classList.remove('ok');
+  } finally {
+    saveReminderBtn.disabled = !(bleDevice && bleDevice.gatt && bleDevice.gatt.connected);
+  }
+});
+
+// 断开连接时，重置为下次连接重新同步
+window.addEventListener('beforeunload', () => { hasSyncedFromDevice = false; });
 </script>
 </body>
 </html>
